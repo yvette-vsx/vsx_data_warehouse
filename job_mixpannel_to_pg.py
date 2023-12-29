@@ -77,23 +77,8 @@ def find_recent_file(event: str) -> str:
     return None  # type: ignore
 
 
-def send_request(sdate_str: str, edate_str: str, **kwargs) -> str:
-    edate = datetime.strptime(edate_str.replace("-", ""), "%Y%m%d")
-    if edate > datetime.today():
-        edate_str = datetime.strftime(datetime.today(), "%Y-%m-%d")
-
-    paras = {"from_date": sdate_str, "to_date": edate_str}
-    if kwargs:
-        paras.update(kwargs)
-
-    mixpanel = Mixpanel(1)
-    response = mixpanel.api_request(paras)
-    content = response.text
-    return content
-
-
 # TODO download file from s3
-def download_file(file_path: str):
+def download_file(file_path: str) -> str:
     print(f"read file {recent_file}")
     content = None
     with open(recent_file, "r") as fin:
@@ -128,6 +113,8 @@ if __name__ == "__main__":
     # TODO: argument or fetch from DB
     sdate_str = "2023-12-27"
 
+    mixpanel = Mixpanel(1)
+
     for event in events:
         print(f"Now process event {event}")
         content = None
@@ -136,11 +123,11 @@ if __name__ == "__main__":
 
         if recent_file and not is_expired:
             print(f"Download file {recent_file}")
-            download_file(recent_file)
+            content = download_file(recent_file)
         else:
             print("Sent a request")
             today = datetime.today()
-            content = send_request(
+            content = mixpanel.send_request(
                 sdate_str,
                 datetime.strftime(today, "%Y-%m-%d"),
                 event=[event],
