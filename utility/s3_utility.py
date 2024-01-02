@@ -47,13 +47,14 @@ class S3Helper:
             print("download file failed")
             print(ex)
 
-
-vsx_s3 = S3Helper("vsx-warehouse-data")
-vsx_s3.upload_file_stream("This is a test", "dev/test/test2.txt")
-test_str = vsx_s3.download_file_stream("dev/test/test2.txt")
-print(test_str)
-
-# vsx_s3.upload_file(
-#     "/Users/yuyv/py_projects/vsx_data_warehouse/data/mixpanel/Login/20231227105536.json",
-#     "dev/test/login_test.json",
-# )
+    def list_object(self, object_prefix: str):
+        response = self.s3.list_objects(Bucket=self.bucket, Prefix=object_prefix)
+        res = response.get("Contents")
+        if not res:
+            return None
+        files = []
+        for item in res:
+            obj_name = item["Key"]
+            if not obj_name.endswith("/"):
+                files.append(obj_name)
+        return files
