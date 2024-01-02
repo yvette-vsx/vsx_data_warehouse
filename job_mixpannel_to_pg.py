@@ -1,12 +1,11 @@
 from datetime import datetime, timedelta
-import glob
 import json
 import os
 import pandas as pd
 
-# from pyspark.sql import SparkSession
 from helper import dw_pg_helper
 from helper.mixpannel_helper import Mixpanel
+from utility.s3_utility import S3Helper
 
 col_name_map = {
     "time": "sys_ts",
@@ -18,6 +17,8 @@ col_name_map = {
     "action": "sys_action",
     "type": "class_type",
 }
+
+s3 = S3Helper("vsx-warehouse-data")
 
 
 def normalized_key(old_key: str) -> str:
@@ -69,27 +70,20 @@ def is_file_expired(file_path: str) -> bool:
     return now > thresh_time
 
 
-def find_recent_file(event: str) -> str:
-    file_path = f"./data/mixpanel/{event}/*.json"
-    files = glob.glob(file_path)
+def find_recent_file(prefix: str) -> str:
+    files = s3.list_object(prefix)
     if files:
         return max(files)
     return None  # type: ignore
 
 
-# TODO download file from s3
-def download_file(file_path: str) -> str:
-    print(f"read file {recent_file}")
-    content = None
-    with open(recent_file, "r") as fin:
-        content = fin.read()
+def download_file(obj_name: str) -> str:
+    content = s3.download_file_stream(obj_name)
     return content
 
 
-# TODO: upload file to s3
-def upload_file(file_path: str, content: str):
-    with open(file_path, "w") as fout:
-        fout.write(content)
+def upload_file(obj_name: str, content: str):
+    s3.upload_file_stream(content, obj_name)
 
 
 if __name__ == "__main__":
@@ -117,10 +111,12 @@ if __name__ == "__main__":
 
     for event in events:
         print(f"Now process event {event}")
-        content = None
-        recent_file = find_recent_file(event)
+
+        s3_folder = f"dev/mixpanel/class_swift/{event.lower()}"
+        recent_file = find_recent_file(s3_folder)
         is_expired = is_file_expired(recent_file)
 
+        content = None
         if recent_file and not is_expired:
             print(f"Download file {recent_file}")
             content = download_file(recent_file)
