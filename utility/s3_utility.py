@@ -3,6 +3,10 @@ import boto3
 
 class S3Helper:
     def __init__(self, bucket: str, profile=None):
+        """
+        bucket: Bucket name
+        profile: Which set of aws account and secret you use, if you use default, you don't need to input anything.
+        """
         if profile:
             self.s3 = boto3.Session(profile_name=profile).client("s3")
         else:
@@ -10,12 +14,8 @@ class S3Helper:
         self.bucket = bucket
 
     def upload_file_stream(self, content: str, object_name: str) -> bool:
-        """
-        You should check content is not None before you call this method
-        """
         try:
-            barray: str = "".join(format(ord(i), "08b") for i in content)
-            self.s3.put_object(Body=barray, Bucket=self.bucket, Key=object_name)
+            self.s3.put_object(Body=content, Bucket=self.bucket, Key=object_name)
         except Exception as ex:
             print("upload file failed")
             print(ex)
@@ -42,7 +42,7 @@ class S3Helper:
     def download_file_stream(self, object_name: str) -> str:  # type: ignore
         try:
             response = self.s3.get_object(Bucket=self.bucket, Key=object_name)
-            return response["Body"].read()
+            return response["Body"].read().decode("utf-8")
         except Exception as ex:
             print("download file failed")
             print(ex)
