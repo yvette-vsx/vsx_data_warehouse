@@ -1,10 +1,10 @@
 from datetime import datetime, timedelta
 import json
 import os
-import pandas as pd
-
-from helper import dw_pg_helper
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import lit
 from helper.mixpannel_helper import Mixpanel
+from schema.mixpanel import schemas
 from utility.s3_utility import S3Helper
 
 col_name_map = {
@@ -17,6 +17,14 @@ col_name_map = {
     "action": "sys_action",
     "type": "class_type",
 }
+
+spark = (
+    SparkSession.builder.master("local[8]")
+    .config("spark.driver.memory", "8G")
+    .config("spark.jars.packages", "org.postgresql:postgresql:42.3.3")
+    .config("spark.sql.mapKeyDedupPolicy", "LAST_WIN")
+    .getOrCreate()
+)
 
 s3 = S3Helper("vsx-warehouse-data")
 
@@ -51,15 +59,18 @@ def flat_mutli_layers(input: dict, prefix=None) -> dict:
 # TODO: Controled the columns
 # TODO: Added create_date, last_upd_date
 # TODO: Transformed col [sys_ts] or [api_ts]
-def process_and_load(content: str, table_name: str):
+def process_and_load(content: str, event: str):
     records = []
     for line in content.splitlines():
         event_dict = json.loads(line)
         flat_dict = flat_mutli_layers(event_dict["properties"])
-        flat_dict["class_event"] = event_dict["event"]
         records.append(flat_dict)
-    df = pd.DataFrame(records)
-    df.to_sql(table_name, con=dw_pg_helper.engine, if_exists="append", index=False)
+    schema = schemas.get(event)
+    df = spark.read.json(spark.sparkContext.parallelize(records), schema=schema)
+    now_time = datetime.now()
+    df.select(lit(now_time).alias("create_date"))
+    df.select(lit(now_time).alias("last_upd_date"))
+    df.show()
 
 
 def is_file_expired(file_path: str) -> bool:
@@ -103,7 +114,7 @@ if __name__ == "__main__":
         "QuizStart",
         "QuizEnd",
     ]
-    events = ["PushBtn"]
+    events = ["LessonEnd"]
     # TODO: argument or fetch from DB
     sdate_str = "2023-12-27"
 
@@ -133,4 +144,4 @@ if __name__ == "__main__":
             upload_file(fout_name, content)
 
         if content:
-            process_and_load(content, f"mp_{event.lower()}")
+            process_and_load(content, event.lower())
