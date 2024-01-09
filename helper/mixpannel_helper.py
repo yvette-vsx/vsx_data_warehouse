@@ -21,7 +21,7 @@ class Mixpanel:
         return new_url.replace("%27", "%22")
 
     def _get_project_id(self) -> str:
-        if self.envir == EnviroType.ENVIRO_CODE_PROD:
+        if self.envir == EnviroType.PROD.value:
             return MIX_PANEL_CS_PROJECT_ID_PROD
         else:
             return MIX_PANEL_CS_PROJECT_ID_STG
@@ -29,7 +29,7 @@ class Mixpanel:
     def _request(self, paras: dict) -> requests.Response:
         url = Mixpanel.base_url + self.url_encode(paras)
         svc_account = None
-        if self.envir == EnviroType.ENVIRO_CODE_PROD:
+        if self.envir == EnviroType.PROD.value:
             svc_account = MIX_PANEL_SVC_ACCOUNT_PROD
         else:
             svc_account = MIX_PANEL_SVC_ACCOUNT_STG
