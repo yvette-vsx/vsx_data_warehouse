@@ -4,14 +4,14 @@ import os
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import lit
 from helper.mixpannel_helper import Mixpanel
-from schema.mixpanel import schemas
+from schema import mixpanel_schema
 from utility.s3_utility import S3Helper
 
 col_name_map = {
     "time": "sys_ts",
-    "timestamp": "api_ts",
+    # "timestamp": "api_ts",
     "role": "account_role",
-    "event": "class_event",
+    # "event": "class_event",
     "version": "release_version",
     "session": "api_session_id",
     "action": "sys_action",
@@ -56,16 +56,13 @@ def flat_mutli_layers(input: dict, prefix=None) -> dict:
     return rs_dict
 
 
-# TODO: Controled the columns
-# TODO: Added create_date, last_upd_date
-# TODO: Transformed col [sys_ts] or [api_ts]
 def process_and_load(content: str, event: str):
     records = []
     for line in content.splitlines():
         event_dict = json.loads(line)
         flat_dict = flat_mutli_layers(event_dict["properties"])
         records.append(flat_dict)
-    schema = schemas.get(event)
+    schema = mixpanel_schema.generate_schema_by_event(event)
     df = spark.read.json(spark.sparkContext.parallelize(records), schema=schema)
     now_time = datetime.now()
     df.select(lit(now_time).alias("create_date"))
