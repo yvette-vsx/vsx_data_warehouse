@@ -5,17 +5,16 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import lit
 from helper.mixpannel_helper import Mixpanel
 from schema import mixpanel_schema
+from utility.constants import MixpanelColName, DWCommonColName
 from utility.s3_utility import S3Helper
 
+
 col_name_map = {
-    "time": "sys_ts",
-    # "timestamp": "api_ts",
-    "role": "account_role",
-    # "event": "class_event",
-    "version": "release_version",
-    "session": "api_session_id",
-    "action": "sys_action",
-    "type": "class_type",
+    "time": MixpanelColName.MP_TIMESTAMP.value,
+    "role": MixpanelColName.CS_ROLE.value,
+    "version": MixpanelColName.CS_VERSION_ID.value,
+    "client": MixpanelColName.CS_CLIENT.value,
+    "user_id": MixpanelColName.CS_USER_ID.value,
 }
 
 spark = (
@@ -65,8 +64,8 @@ def process_and_load(content: str, event: str):
     schema = mixpanel_schema.generate_schema_by_event(event)
     df = spark.read.json(spark.sparkContext.parallelize(records), schema=schema)
     now_time = datetime.now()
-    df.select(lit(now_time).alias("create_date"))
-    df.select(lit(now_time).alias("last_upd_date"))
+    df.select(lit(now_time).alias(DWCommonColName.DW_CREATE_DATE.value))
+    df.select(lit(now_time).alias(DWCommonColName.DW_LAST_UPD_DATE.value))
     df.show()
 
 
