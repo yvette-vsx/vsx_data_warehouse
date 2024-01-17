@@ -24,7 +24,15 @@ class MixpanelColName(Enum):
     CS_ROOM_ID = "room_id"
     CS_CLASS_ID = "class_id"
     CS_LESSON_ID = "lesson_id"
+    CS_TASK_ID = "task_id"
     MP_DEVICE = "device"
+    CS_LOGIN_TYPE = "login_type"
+    CS_TRIGGER_TYPE = "trigger_type"
+    CS_PUSH_TYPE = "push_type"
+    CS_QUIZ_ID = "quiz_id"
+    CS_QUIZ_TYPE = "quiz_type"
+    CS_PLATFORM = "platform"
+    MP_DT = "mp_dt"
 
 
 class DWCommonColName(Enum):
@@ -41,3 +49,6 @@ class MixpanelEvent(Enum):
     LOGOUT = "logout"
     RECONNECT = "reconnect"
     STUD_JOIN = "studentjoin"
+    PUSH_BTN = "pushbtn"
+    QUIZ_START = "quizstart"
+    QUIZ_END = "quizend"
