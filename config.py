@@ -22,13 +22,14 @@ _PG_DW_CONNECT_URL = (
 PG_PROD_CONNECT_URL = _PG_DW_CONNECT_URL % PG_WH_PROD_CONFIG
 PG_DEV_CONNECT_URL = _PG_DW_CONNECT_URL % PG_WH_DEV_CONFIG
 
-MIX_PANEL_SVC_ACCOUNT_PROD = (config["mixpanel.service.account.prod"]["user"], 
-                           config["mixpanel.service.account.prod"]["secret"])
+MIX_PANEL_SVC_ACCOUNT_PROD = (
+    config["mixpanel.service.account.prod"]["user"],
+    config["mixpanel.service.account.prod"]["secret"],
+)
 MIX_PANEL_CS_PROJECT_ID_PROD = config["mixpanel.service.account.prod"]["peojectid"]
 
-MIX_PANEL_SVC_ACCOUNT_STG = (config["mixpanel.service.account.stg"]["user"], 
-                           config["mixpanel.service.account.stg"]["secret"])
+MIX_PANEL_SVC_ACCOUNT_STG = (
+    config["mixpanel.service.account.stg"]["user"],
+    config["mixpanel.service.account.stg"]["secret"],
+)
 MIX_PANEL_CS_PROJECT_ID_STG = config["mixpanel.service.account.stg"]["peojectid"]
-
-
-
