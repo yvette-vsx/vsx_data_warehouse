@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 from config import PG_WH_PROD_CONFIG
 from helper.mixpannel_helper import Mixpanel
+from helper import pg_mixpanel_helper as ph
 from schema import mixpanel_schema
 from utility.constants import (
     EnviroType,
@@ -24,6 +25,7 @@ col_name_map = {
     "version": MixpanelColName.CS_VERSION_ID.value,
     "client": MixpanelColName.CS_CLIENT.value,
     "user_id": MixpanelColName.CS_USER_ID.value,
+    "class_id": MixpanelColName.CS_ROOM_ID.value,
 }
 
 spark = (
@@ -49,9 +51,8 @@ def flat_mutli_layers(input: dict, prefix=None) -> dict:
     rs_dict = {}
 
     for k, v in input.items():
-        # key remove the prefix $ and add upper-layer k name as prefix
         k = normalized_key(k, prefix)
-        # mapping the key name, if value is a dict(nested). k remained.
+        # Renamed the key name, if the value is a dict(nested). The k remained.
         map_k = col_name_map.get(k, k)
         if isinstance(v, dict):
             rs_dict.update(flat_mutli_layers(v, k))
@@ -66,7 +67,7 @@ def process_transform(content: str):
     records = []
     schema = mixpanel_schema.generate_schema_by_event(event)
     fields = schema.jsonValue()["fields"]
-    columns = [field["name"] for field in fields if not field["nullable"]]
+    notnull_cols = [field["name"] for field in fields if not field["nullable"]]
     for line in content.splitlines():
         event_dict = json.loads(line)
         flat_dict = flat_mutli_layers(event_dict["properties"])
@@ -74,23 +75,14 @@ def process_transform(content: str):
         flat_dict[MixpanelColName.MP_DT.value] = datetime.fromtimestamp(
             flat_dict[MixpanelColName.MP_TIMESTAMP.value], cst_tz
         )
-        ## event is reconnect or disconnect, cs_user_id 才會用distinct_id 代替
-        # if event in (MixpanelEvent.RECONNECT.value, MixpanelEvent.DISCONNECT.value):
-        #     cs_user_id = MixpanelColName.CS_USER_ID.value
-        #     if cs_user_id not in flat_dict:
-        #         flat_dict[cs_user_id] = flat_dict[MixpanelColName.MP_DISTINCT_ID.value]
-        # now_time = datetime.now(tz=cst_tz)
-        ## Added create_date and last_upd_date
-        # flat_dict[DWCommonColName.DW_CREATE_DATE.value] = now_time
-        # flat_dict[DWCommonColName.DW_LAST_UPD_DATE.value] = now_time
-        if check_data_validation(flat_dict, columns):
+        if check_data_not_nullable(flat_dict, notnull_cols):
             records.append(flat_dict)
         else:
             print(flat_dict)
     return records
 
 
-def check_data_validation(record, constrained_cols):
+def check_data_not_nullable(record, constrained_cols):
     is_valid = True
     for name in constrained_cols:
         value = record.get(name)
@@ -103,7 +95,6 @@ def check_data_validation(record, constrained_cols):
 def load(records: list[dict], event: str):
     schema = mixpanel_schema.generate_schema_by_event(event)
     df = spark.createDataFrame(records, schema=schema)
-    df.show()
     now_time = datetime.now(tz=cst_tz)
     rs_df = df.withColumn(
         DWCommonColName.DW_CREATE_DATE.value, lit(now_time)
@@ -176,24 +167,64 @@ def upload_file(obj_name: str, content: str):
 #     return None  # type: ignore
 
 
+def fetch_unix_startdate_by_date(year: int, month: int, day: int):
+    """
+    return a unix datetime object with time is 00:00:00 and its epoch time
+    """
+    tz_gmt = ZoneInfo("GMT")
+    startdate = datetime(year, month, day, 0, 0, tzinfo=tz_gmt)
+    return {
+        "unix_start_date": startdate,
+        "unix_start_epoch": int(startdate.timestamp()),
+    }
+
+
+def find_max_unix_date_in_wh(table_name: str):
+    last_epoch = ph.query_max_epoch_time(table_name)
+    tz_gmt = ZoneInfo("GMT")
+    last_dt = datetime.fromtimestamp(last_epoch, tz_gmt)
+    sdate_dict = fetch_unix_startdate_by_date(last_dt.year, last_dt.month, last_dt.day)
+    print(f"{sdate_dict['unix_start_date']}, epoch={sdate_dict['unix_start_epoch']}")
+    return {
+        "unix_start_date": datetime.strftime(sdate_dict["unix_start_date"], "%Y-%m-%d"),
+        "unix_start_epoch": sdate_dict["unix_start_epoch"],
+    }
+
+
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--event", action="store_true")
+    parser.add_argument(
+        "--type",
+        type=int,
+        help="1=cusotmer; 2=trasaction; 3=product; 4=data_event; 5=action_log; 6=product_notify",
+    )
+    parser.add_argument(
+        "--truncate",
+        action="store_true",
+        help="only transaction was affected by this para",
+    )
+    args = parser.parse_args()
+
     events = [
-        "Disconnect",
-        "Reconnect",
-        "LessonEnd",
-        "LessonStart",
-        "Login",
-        "Logout",
-        "LeaveClass",
-        "StudentJoin",
-        "PushBtn",
-        "QuizStart",
-        "QuizEnd",
+        # "Disconnect",
+        # "Reconnect",
+        # "LessonEnd",
+        # "LessonStart",
+        # "Login",
+        # "Logout",
+        # "LeaveClass",
+        # "StudentJoin",
+        # "PushBtn",
+        # "QuizStart",
+        # "QuizEnd",
     ]
     today = datetime.now(tz=cst_tz)
     # TODO: argument or fetch from DB
-    sdate_str = "2023-12-25"
-    edate_str = "2024-01-01"
+    sdate_str = "2024-01-01"
+    edate_str = "2024-01-06"
     # edate_str = datetime.strftime(today, "%Y-%m-%d")
 
     mixpanel = Mixpanel(EnviroType.PROD)
@@ -217,7 +248,7 @@ if __name__ == "__main__":
             fout_name = f"{s3_folder}/{datetime.strftime(today, '%Y%m%d%H%M%S')}.json"
             upload: bool = upload_file(fout_name, content)
             if upload:
-                print(f"upload file to s3 {upload_file} successfully")
+                print(f"upload file to s3 {fout_name} successfully")
 
         if content:
             if event == "LeaveClass":
