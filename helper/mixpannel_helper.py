@@ -8,6 +8,7 @@ from config import (
     MIX_PANEL_SVC_ACCOUNT_STG,
 )
 from utility.constants import EnviroType
+from utility import datetime_utility as du
 
 
 class Mixpanel:
@@ -38,14 +39,14 @@ class Mixpanel:
         return requests.get(url, auth=svc_account)
 
     def send_request(self, sdate_str: str, edate_str: str, **kwargs) -> str:
-        edate = datetime.strptime(edate_str.replace("-", ""), "%Y%m%d")
+        edate: datetime = datetime.strptime(edate_str.replace("-", ""), "%Y%m%d")
         if edate > datetime.today():
             edate_str = datetime.strftime(datetime.today(), "%Y-%m-%d")
 
         paras = {
             "project_id": self._get_project_id(),
-            "from_date": sdate_str,
-            "to_date": edate_str,
+            "from_date": du.transform_date_str_with_dash(sdate_str),
+            "to_date": du.transform_date_str_with_dash(edate_str),
         }
         if kwargs:
             paras.update(kwargs)

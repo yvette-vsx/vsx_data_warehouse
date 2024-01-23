@@ -16,7 +16,6 @@ from utility.constants import (
     DWCommonColName,
     MixpanelEvent,
 )
-from utility.s3_utility import S3Helper
 
 
 col_name_map = {
@@ -34,8 +33,8 @@ spark = (
     .getOrCreate()
 )
 
-s3 = S3Helper("vsx-warehouse-data")
-cst_tz = ZoneInfo("Asia/Taipei")
+tz_cst = ZoneInfo("Asia/Taipei")
+tz_gmt = ZoneInfo("GMT")
 
 eliminate_head_sign = lambda input: input.replace("$", "")
 add_prefix = lambda prefix, input: prefix + "." + input
@@ -73,7 +72,7 @@ def process_transform(content: str):
         flat_dict = flat_mutli_layers(event_dict["properties"])
         # Added a column mp_td from mp_ts
         flat_dict[MixpanelColName.MP_DT.value] = datetime.fromtimestamp(
-            flat_dict[MixpanelColName.MP_TIMESTAMP.value], cst_tz
+            flat_dict[MixpanelColName.MP_TIMESTAMP.value], tz_cst
         )
         if check_data_not_nullable(flat_dict, notnull_cols):
             records.append(flat_dict)
@@ -95,7 +94,7 @@ def check_data_not_nullable(record, constrained_cols):
 def load(records: list[dict], event: str):
     schema = mixpanel_schema.generate_schema_by_event(event)
     df = spark.createDataFrame(records, schema=schema)
-    now_time = datetime.now(tz=cst_tz)
+    now_time = datetime.now(tz=tz_cst)
     rs_df = df.withColumn(
         DWCommonColName.DW_CREATE_DATE.value, lit(now_time)
     ).withColumn(DWCommonColName.DW_LAST_UPD_DATE.value, lit(now_time))
@@ -121,50 +120,10 @@ def is_file_expired(file_path: str) -> bool:
     ts = os.path.splitext(os.path.basename(file_path))[0]
     file_ctime = datetime.strptime(ts, "%Y%m%d%H%M%S")
     file_ctime.tzinfo
-    now = datetime.now(tz=cst_tz)
+    now = datetime.now(tz=tz_cst)
     thresh_time = file_ctime + timedelta(hours=1)
-    now_aware = thresh_time.replace(tzinfo=cst_tz)
+    now_aware = thresh_time.replace(tzinfo=tz_cst)
     return now > now_aware
-
-
-def find_recent_file(prefix: str) -> str:
-    files = s3.list_object(prefix)
-    if files:
-        return max(files)
-    return None  # type: ignore
-
-
-def download_file(obj_name: str) -> str:
-    content = s3.download_file_stream(obj_name)
-    return content
-
-
-def upload_file(obj_name: str, content: str):
-    return s3.upload_file_stream(content, obj_name)
-
-
-# def download_file(file_path: str):
-#     print(f"read file {recent_file}")
-#     content = None
-#     with open(recent_file, "r") as fin:
-#         content = fin.read()
-#     return content
-
-
-# def upload_file(file_path: str, content: str) -> bool:
-#     with open(file_path, "w") as fout:
-#         fout.write(content)
-#     return True
-
-
-# def find_recent_file(path: str) -> str:
-#     import glob
-
-#     file_path = f"{path}/*.json"
-#     files = glob.glob(file_path)
-#     if files:
-#         return max(files)
-#     return None  # type: ignore
 
 
 def fetch_unix_startdate_by_date(year: int, month: int, day: int):
@@ -191,66 +150,130 @@ def find_max_unix_date_in_wh(table_name: str):
     }
 
 
+def send_process(sdate_str, edate_str, event_list, fout_name, file_processor):
+    print("Sent a request")
+    content = mixpanel.send_request(sdate_str, edate_str, event=event_list)  # type: ignore
+    upload: bool = file_processor.upload_file(fout_name, content)
+    if upload:
+        print(f"upload file to s3 {fout_name} successfully")
+    return content
+
+
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--event", action="store_true")
+    parser.add_argument("-ev", "--events", help="ex:Disconnect,Reconnect")
     parser.add_argument(
-        "--type",
-        type=int,
-        help="1=cusotmer; 2=trasaction; 3=product; 4=data_event; 5=action_log; 6=product_notify",
+        "-s", "--sdate", help="ex:20240105, default is max of mp_ts in DB"
     )
     parser.add_argument(
-        "--truncate",
+        "-e",
+        "--edate",
+        help="ex:20240105, it and sdate could be same day. default is today",
+    )
+    # --file 參數加入難以判斷日期重複的事件，變成要先手動確認DB資料狀況，故先拿掉
+    # parser.add_argument("-f", "--file", help="20240117183816.json")
+    parser.add_argument("--test", help="store file in local FS", action="store_true")
+    parser.add_argument(
+        "--notcheck",
+        help="not check the request has been sent in one hour",
         action="store_true",
-        help="only transaction was affected by this para",
     )
     args = parser.parse_args()
 
     events = [
-        # "Disconnect",
-        # "Reconnect",
-        # "LessonEnd",
-        # "LessonStart",
-        # "Login",
-        # "Logout",
-        # "LeaveClass",
-        # "StudentJoin",
-        # "PushBtn",
-        # "QuizStart",
-        # "QuizEnd",
+        "Disconnect",
+        "Reconnect",
+        "LessonEnd",
+        "LessonStart",
+        "Login",
+        "Logout",
+        "LeaveClass",
+        "StudentJoin",
+        "PushBtn",
+        "QuizStart",
+        "QuizEnd",
     ]
-    today = datetime.now(tz=cst_tz)
-    # TODO: argument or fetch from DB
-    sdate_str = "2024-01-01"
-    edate_str = "2024-01-06"
-    # edate_str = datetime.strftime(today, "%Y-%m-%d")
+    if args.events:
+        events = args.events.split(",")
 
-    mixpanel = Mixpanel(EnviroType.PROD)
+    today: datetime = datetime.now(tz=tz_cst)
+    del_time_dict = None
+    sdate_str = None
+    edate_str = None
 
-    for event in events:
-        table_name = event.lower()
-        print(f"Now process event {event}")
+    if args.sdate:
+        sdate_str = args.sdate
+        edate_str = args.edate
 
-        s3_folder = f"{EnviroType.PROD.name.lower()}/mixpanel/class_swift/{table_name}"
-        # s3_folder = f"./data/mixpanel/{event}"
-        recent_file = find_recent_file(s3_folder)
-        # is_expired = is_file_expired(recent_file) if recent_file else False
-        is_expired = False
-        content = None
-        if recent_file and not is_expired:
-            print(f"Download file {recent_file}")
-            content = download_file(recent_file)
+        del_time_dict = fetch_unix_startdate_by_date(
+            int(sdate_str[:4]), int(sdate_str[4:6]), int(sdate_str[6:])
+        )
+
+    file_processor = None
+    root_path = None
+    env_enum = EnviroType.PROD
+    if args.test:
+        env_enum = EnviroType.DEV
+        root_path = "./data/mixpanel"
+        from data_processor.local_file_processor import LocalFileProcessor
+
+        file_processor = LocalFileProcessor()
+
+    else:
+        root_path = f"{env_enum.name.lower()}/mixpanel/class_swift"
+        from data_processor.aws_file_processor import AWSFileProcess
+
+        file_processor = AWSFileProcess()
+
+    mixpanel = Mixpanel(env_enum)
+
+    for e in events:
+        # event [LeaveClass] was renamed [StudentLeave]
+        if e == "LeaveClass":
+            event_list = [e, "StudentLeave"]
+            event = "studentleave"
         else:
-            print("Sent a request")
-            content = mixpanel.send_request(sdate_str, edate_str, event=[event])
-            fout_name = f"{s3_folder}/{datetime.strftime(today, '%Y%m%d%H%M%S')}.json"
-            upload: bool = upload_file(fout_name, content)
-            if upload:
-                print(f"upload file to s3 {fout_name} successfully")
+            event_list = [e]
+            event = e.lower()
+        print(f"Now process event [{event}]")
+
+        table_name = f"mp_{event}"
+        folder_path = f"{root_path}/{event}"
+
+        if not args.sdate:
+            del_time_dict = find_max_unix_date_in_wh(table_name)
+            sdate_str = del_time_dict["unix_start_date"]
+            edate_str = datetime.strftime(datetime.now(tz=tz_gmt), "%Y-%m-%d")
+
+        # epoch=32503680000 ->  3000/1/1
+        del_epoch = del_time_dict.get("unix_start_epoch", 32503680000)
+
+        print(f"request data from {sdate_str} to {edate_str}")
+        cnt = ph.delete_by_epoch_time(table_name, del_epoch)
+        print(
+            f"delete [{cnt} records] in DW table [{ph.schema}.{table_name}] where [mp_ts >= {del_epoch}]"
+        )
+
+        if args.notcheck:
+            fout_name = f"{root_path}/backfile/{event}/{sdate_str}_{edate_str}.json"
+            content = send_process(
+                sdate_str, edate_str, event_list, fout_name, file_processor
+            )
+        else:
+            recent_file = file_processor.find_recent_file(folder_path)
+            is_expired = is_file_expired(recent_file) if recent_file else False
+            if recent_file and not is_expired:
+                print(f"download file:{recent_file}")
+                content = file_processor.download_file(recent_file)
+            else:
+                fout_name = (
+                    f"{folder_path}/{datetime.strftime(today, '%Y%m%d%H%M%S')}.json"
+                )
+                content = send_process(
+                    sdate_str, edate_str, event_list, fout_name, file_processor
+                )
 
         if content:
-            if event == "LeaveClass":
-                table_name = "studentleave"
-            load(process_transform(content), table_name)
+            load(process_transform(content), event)

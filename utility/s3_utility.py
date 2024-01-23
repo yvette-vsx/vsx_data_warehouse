@@ -1,4 +1,5 @@
 import boto3
+from botocore.exceptions import ClientError
 
 
 class S3Helper:
@@ -58,3 +59,12 @@ class S3Helper:
             if not obj_name.endswith("/"):
                 files.append(obj_name)
         return files
+
+    def get_object_meta(self, object_name):
+        try:
+            resp = self.s3.head_object(Bucket=self.bucket, Key=object_name)
+            return resp
+        except ClientError as ce:
+            print(ce)
+            print(f"file {object_name} does not exist")
+            return None
