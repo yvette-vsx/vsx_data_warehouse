@@ -251,10 +251,6 @@ if __name__ == "__main__":
         del_epoch = del_time_dict.get("unix_start_epoch", 32503680000)
 
         print(f"request data from {sdate_str} to {edate_str}")
-        cnt = ph.delete_by_epoch_time(table_name, del_epoch)
-        print(
-            f"delete [{cnt} records] in DW table [{ph.schema}.{table_name}] where [mp_ts >= {del_epoch}]"
-        )
 
         if args.notcheck:
             fout_name = f"{root_path}/backfile/{event}/{sdate_str}_{edate_str}.json"
@@ -279,4 +275,8 @@ if __name__ == "__main__":
         #     "prod/mixpanel/class_swift/backfile/studentleave/20240115_20240123.json"
         # )
         if content:
+            cnt = ph.delete_by_epoch_time(table_name, del_epoch)
+            print(
+                f"delete [{cnt} records] in DW table [{ph.schema}.{table_name}] where [mp_ts >= {del_epoch}]"
+            )
             load(process_transform(content), event)
