@@ -274,6 +274,9 @@ if __name__ == "__main__":
                 content = send_process(
                     sdate_str, edate_str, event_list, fout_name, file_processor
                 )
-
+        ### 指定檔案，寫入DB時可能會造成data duplication, 故不納入自動化流程，手動執行時要注意會刪掉>=start_date之後的資料
+        # content = file_processor.download_file(
+        #     "prod/mixpanel/class_swift/backfile/studentleave/20240115_20240123.json"
+        # )
         if content:
             load(process_transform(content), event)
