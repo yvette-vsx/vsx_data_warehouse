@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta
 import json
 import os
-from pyspark.sql import SparkSession
 from pyspark.sql.functions import lit, when
 from zoneinfo import ZoneInfo
 
@@ -28,17 +27,12 @@ col_name_map = {
     "class_id": MixpanelColName.CS_ROOM_ID.value,
 }
 
-spark = (
-    SparkSession.builder.master("local[4]")
-    .config("spark.jars.packages", "org.postgresql:postgresql:42.3.3")
-    .getOrCreate()
-)
-
 tz_cst = ZoneInfo("Asia/Taipei")
 tz_gmt = ZoneInfo("GMT")
 
 eliminate_head_sign = lambda input: input.replace("$", "")
 add_prefix = lambda prefix, input: prefix + "." + input
+spark = spark_util.get_spark()
 
 
 def normalized_key(old_key: str, prefix=None) -> str:
