@@ -3,3 +3,4 @@ config.ini
 *.ipynb
 messenger
 data
+log/

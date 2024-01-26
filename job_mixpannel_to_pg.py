@@ -16,7 +16,8 @@ from utility.constants import (
     DWCommonColName,
     MixpanelEvent,
 )
-
+from utility import spark_util
+from utility.logger import logger
 
 col_name_map = {
     "time": MixpanelColName.MP_TIMESTAMP.value,
@@ -77,7 +78,7 @@ def process_transform(content: str):
         if check_data_not_nullable(flat_dict, notnull_cols):
             records.append(flat_dict)
         else:
-            print(flat_dict)
+            logger.info(flat_dict)
     return records
 
 
@@ -143,7 +144,9 @@ def find_max_unix_date_in_wh(table_name: str):
     tz_gmt = ZoneInfo("GMT")
     last_dt = datetime.fromtimestamp(last_epoch, tz_gmt)
     sdate_dict = fetch_unix_startdate_by_date(last_dt.year, last_dt.month, last_dt.day)
-    print(f"{sdate_dict['unix_start_date']}, epoch={sdate_dict['unix_start_epoch']}")
+    logger.info(
+        f"{sdate_dict['unix_start_date']}, epoch={sdate_dict['unix_start_epoch']}"
+    )
     return {
         "unix_start_date": datetime.strftime(sdate_dict["unix_start_date"], "%Y-%m-%d"),
         "unix_start_epoch": sdate_dict["unix_start_epoch"],
@@ -151,11 +154,11 @@ def find_max_unix_date_in_wh(table_name: str):
 
 
 def send_process(sdate_str, edate_str, event_list, fout_name, file_processor):
-    print("Sent a request")
+    logger.info("Sent a request")
     content = mixpanel.send_request(sdate_str, edate_str, event=event_list)  # type: ignore
     upload: bool = file_processor.upload_file(fout_name, content)
     if upload:
-        print(f"upload file to s3 {fout_name} successfully")
+        logger.info(f"upload file to s3 {fout_name} successfully")
     return content
 
 
@@ -237,7 +240,7 @@ if __name__ == "__main__":
         else:
             event_list = [e]
             event = e.lower()
-        print(f"Now process event [{event}]")
+        logger.info(f"Now process event [{event}]")
 
         table_name = f"mp_{event}"
         folder_path = f"{root_path}/{event}"
@@ -250,7 +253,7 @@ if __name__ == "__main__":
         # epoch=32503680000 ->  3000/1/1
         del_epoch = del_time_dict.get("unix_start_epoch", 32503680000)
 
-        print(f"request data from {sdate_str} to {edate_str}")
+        logger.info(f"request data from {sdate_str} to {edate_str}")
 
         if args.notcheck:
             fout_name = f"{root_path}/backfile/{event}/{sdate_str}_{edate_str}.json"
@@ -261,7 +264,7 @@ if __name__ == "__main__":
             recent_file = file_processor.find_recent_file(folder_path)
             is_expired = is_file_expired(recent_file) if recent_file else False
             if recent_file and not is_expired:
-                print(f"download file:{recent_file}")
+                logger.info(f"download file:{recent_file}")
                 content = file_processor.download_file(recent_file)
             else:
                 fout_name = (
@@ -276,7 +279,7 @@ if __name__ == "__main__":
         # )
         if content:
             cnt = ph.delete_by_epoch_time(table_name, del_epoch)
-            print(
+            logger.info(
                 f"delete [{cnt} records] in DW table [{ph.schema}.{table_name}] where [mp_ts >= {del_epoch}]"
             )
             load(process_transform(content), event)
