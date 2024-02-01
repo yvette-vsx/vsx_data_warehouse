@@ -86,7 +86,7 @@ def check_data_not_nullable(record, constrained_cols):
     return is_valid
 
 
-def load(records: list[dict], event: str):
+def load(records: list[dict], event: str, table_name: str):
     schema = mixpanel_schema.generate_schema_by_event(event)
     df = spark.createDataFrame(records, schema=schema)
     now_time = datetime.now(tz=tz_cst)
@@ -108,7 +108,9 @@ def load(records: list[dict], event: str):
         "password": PG_WH_PROD_CONFIG["password"],
         "driver": "org.postgresql.Driver",
     }
-    rs_df.write.jdbc(url, f"mixpanel.mp_{event}", mode="append", properties=properties)
+    rs_df.write.jdbc(
+        url, f"mixpanel.{table_name}", mode="append", properties=properties
+    )
 
 
 def is_file_expired(file_path: str) -> bool:
@@ -269,11 +271,11 @@ if __name__ == "__main__":
                 )
         ### 指定檔案，寫入DB時可能會造成data duplication, 故不納入自動化流程，手動執行時要注意會刪掉>=start_date之後的資料
         # content = file_processor.download_file(
-        #     "prod/mixpanel/class_swift/backfile/studentleave/20240115_20240123.json"
+        #     f"prod/mixpanel/class_swift/backfile/{event}/{sdate_str}_{edate_str}.json"
         # )
         if content:
             cnt = ph.delete_by_epoch_time(table_name, del_epoch)
             logger.info(
                 f"delete [{cnt} records] in DW table [{ph.schema}.{table_name}] where [mp_ts >= {del_epoch}]"
             )
-            load(process_transform(content), event)
+            load(process_transform(content), event, table_name)
