@@ -33,6 +33,7 @@ class MixpanelColName(Enum):
     CS_QUIZ_TYPE = "quiz_type"
     CS_PLATFORM = "platform"
     MP_DT = "mp_dt"
+    CS_SESSION = "cs_session_id"
 
 
 class DWCommonColName(Enum):

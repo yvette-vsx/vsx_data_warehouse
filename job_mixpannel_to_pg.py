@@ -25,6 +25,7 @@ col_name_map = {
     "client": MixpanelColName.CS_CLIENT.value,
     "user_id": MixpanelColName.CS_USER_ID.value,
     "class_id": MixpanelColName.CS_ROOM_ID.value,
+    "session": MixpanelColName.CS_SESSION.value,
 }
 
 tz_cst = ZoneInfo("Asia/Taipei")

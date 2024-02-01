@@ -66,6 +66,10 @@ def add_trigger_type(nullable=True):
     return add_other(MixpanelColName.CS_TRIGGER_TYPE.value)
 
 
+def add_session_id(nullable=True):
+    return add_other(MixpanelColName.CS_SESSION.value)
+
+
 def generate_schema_by_event(event: str):
     fields = add_must_have_cols()
 
@@ -81,19 +85,23 @@ def generate_schema_by_event(event: str):
 
     elif event == MixpanelEvent.LOGIN.value:
         fields += add_client_must_have_cols()
+        fields.append(add_session_id())
         fields.append(add_other(MixpanelColName.CS_LOGIN_TYPE.value))
 
     elif event == MixpanelEvent.LOGOUT.value:
         fields += add_client_must_have_cols()
+        fields.append(add_session_id())
         fields.append(add_room_id())
 
     elif event == MixpanelEvent.LESSON_START.value:
         fields += add_client_must_have_cols()
+        fields.append(add_session_id())
         fields.append(add_room_id())
         fields.append(add_lesson_id())
 
     elif event == MixpanelEvent.LESSON_END.value:
         fields += add_client_must_have_cols()
+        fields.append(add_session_id())
         fields.append(add_room_id())
         fields.append(add_lesson_id())
 
@@ -113,6 +121,7 @@ def generate_schema_by_event(event: str):
 
     elif event == MixpanelEvent.PUSH_BTN.value:
         fields += add_client_must_have_cols()
+        fields.append(add_session_id())
         fields.append(add_lesson_id())
         fields.append(add_room_id())
         fields.append(add_other(MixpanelColName.CS_TASK_ID.value))
@@ -120,6 +129,7 @@ def generate_schema_by_event(event: str):
 
     elif event == MixpanelEvent.QUIZ_START.value:
         fields += add_client_must_have_cols()
+        fields.append(add_session_id())
         fields.append(add_lesson_id())
         fields.append(add_room_id())
         fields.append(add_other(MixpanelColName.CS_QUIZ_ID.value))
@@ -127,6 +137,7 @@ def generate_schema_by_event(event: str):
 
     elif event == MixpanelEvent.QUIZ_END.value:
         fields += add_client_must_have_cols()
+        fields.append(add_session_id())
         fields.append(add_lesson_id())
         fields.append(add_room_id())
         fields.append(add_other(MixpanelColName.CS_QUIZ_ID.value))
