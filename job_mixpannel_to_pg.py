@@ -11,21 +11,21 @@ from helper import pg_mixpanel_helper as ph
 from schema import mixpanel_schema
 from utility.constants import (
     EnviroType,
-    MixpanelColName,
-    DWCommonColName,
-    MixpanelEvent,
+    MxpCol,
+    CommonCol,
+    MxpEvent,
 )
 from utility import spark_util
 from utility.logger import logger
 
 col_name_map = {
-    "time": MixpanelColName.MP_TIMESTAMP.value,
-    "role": MixpanelColName.CS_ROLE.value,
-    "version": MixpanelColName.CS_VERSION_ID.value,
-    "client": MixpanelColName.CS_CLIENT.value,
-    "user_id": MixpanelColName.CS_USER_ID.value,
-    "class_id": MixpanelColName.CS_ROOM_ID.value,
-    "session": MixpanelColName.CS_SESSION.value,
+    "time": MxpCol.MP_TIMESTAMP.value,
+    "role": MxpCol.CS_ROLE.value,
+    "version": MxpCol.CS_VERSION_ID.value,
+    "client": MxpCol.CS_CLIENT.value,
+    "user_id": MxpCol.CS_USER_ID.value,
+    "class_id": MxpCol.CS_ROOM_ID.value,
+    "session": MxpCol.CS_SESSION.value,
 }
 
 tz_cst = ZoneInfo("Asia/Taipei")
@@ -67,8 +67,8 @@ def process_transform(content: str):
         event_dict = json.loads(line)
         flat_dict = flat_mutli_layers(event_dict["properties"])
         # Added a column mp_td from mp_ts
-        flat_dict[MixpanelColName.MP_DT.value] = datetime.fromtimestamp(
-            flat_dict[MixpanelColName.MP_TIMESTAMP.value], tz_cst
+        flat_dict[MxpCol.MP_DT.value] = datetime.fromtimestamp(
+            flat_dict[MxpCol.MP_TIMESTAMP.value], tz_cst
         )
         if check_data_not_nullable(flat_dict, notnull_cols):
             records.append(flat_dict)
@@ -91,12 +91,12 @@ def load(records: list[dict], event: str, table_name: str):
     schema = mixpanel_schema.generate_schema_by_event(event)
     df = spark.createDataFrame(records, schema=schema)
     now_time = datetime.now(tz=tz_cst)
-    rs_df = df.withColumn(
-        DWCommonColName.DW_CREATE_DATE.value, lit(now_time)
-    ).withColumn(DWCommonColName.DW_LAST_UPD_DATE.value, lit(now_time))
+    rs_df = df.withColumn(CommonCol.DW_CREATE_DATE.value, lit(now_time)).withColumn(
+        CommonCol.DW_LAST_UPD_DATE.value, lit(now_time)
+    )
 
-    if event in (MixpanelEvent.RECONNECT.value, MixpanelEvent.DISCONNECT.value):
-        cs_user_id_name = MixpanelColName.CS_USER_ID.value
+    if event in (MxpEvent.RECONNECT.value, MxpEvent.DISCONNECT.value):
+        cs_user_id_name = MxpCol.CS_USER_ID.value
         rs_df = rs_df.withColumn(
             cs_user_id_name, when((df.cs_user_id.isNull()), df.distinct_id)
         )

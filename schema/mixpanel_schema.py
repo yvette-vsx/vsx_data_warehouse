@@ -5,27 +5,27 @@ from pyspark.sql.types import (
     StringType,
     IntegerType,
 )
-from utility.constants import MixpanelColName, MixpanelEvent
+from utility.constants import MxpCol, MxpEvent
 
 
 def add_must_have_cols():
     return [
-        StructField(MixpanelColName.MP_TIMESTAMP.value, IntegerType(), False),
-        StructField(MixpanelColName.MP_DISTINCT_ID.value, StringType(), False),
-        StructField(MixpanelColName.MP_INSERT_ID.value, StringType(), False),
-        StructField(MixpanelColName.CS_USER_ID.value, StringType(), True),
-        StructField(MixpanelColName.CS_VERSION_ID.value, StringType(), True),
-        StructField(MixpanelColName.MP_DT.value, TimestampType(), False),
+        StructField(MxpCol.MP_TIMESTAMP.value, IntegerType(), False),
+        StructField(MxpCol.MP_DISTINCT_ID.value, StringType(), False),
+        StructField(MxpCol.MP_INSERT_ID.value, StringType(), False),
+        StructField(MxpCol.CS_USER_ID.value, StringType(), True),
+        StructField(MxpCol.CS_VERSION_ID.value, StringType(), True),
+        StructField(MxpCol.MP_DT.value, TimestampType(), False),
     ]
 
 
 def add_client_must_have_cols():
     return [
-        StructField(MixpanelColName.CS_PLATFORM.value, StringType(), True),
+        StructField(MxpCol.CS_PLATFORM.value, StringType(), True),
         add_device(),
         StructField("screen_height", IntegerType(), True),
         StructField("screen_width", IntegerType(), True),
-        StructField(MixpanelColName.CS_CLIENT.value, StringType(), True),
+        StructField(MxpCol.CS_CLIENT.value, StringType(), True),
     ]
 
 
@@ -47,100 +47,100 @@ def add_other(col_name: str, data_type=StringType(), nullable=True):
 
 
 def add_room_id(nullable=True):
-    return add_other(MixpanelColName.CS_ROOM_ID.value)
+    return add_other(MxpCol.CS_ROOM_ID.value)
 
 
 def add_lesson_id(nullable=True):
-    return add_other(MixpanelColName.CS_LESSON_ID.value)
+    return add_other(MxpCol.CS_LESSON_ID.value)
 
 
 def add_device(nullable=True):
-    return add_other(MixpanelColName.MP_DEVICE.value)
+    return add_other(MxpCol.MP_DEVICE.value)
 
 
 def add_role(nullable=True):
-    return add_other(MixpanelColName.CS_ROLE.value)
+    return add_other(MxpCol.CS_ROLE.value)
 
 
 def add_trigger_type(nullable=True):
-    return add_other(MixpanelColName.CS_TRIGGER_TYPE.value)
+    return add_other(MxpCol.CS_TRIGGER_TYPE.value)
 
 
 def add_session_id(nullable=True):
-    return add_other(MixpanelColName.CS_SESSION.value)
+    return add_other(MxpCol.CS_SESSION.value)
 
 
 def generate_schema_by_event(event: str):
     fields = add_must_have_cols()
 
-    if event == MixpanelEvent.DISCONNECT.value:
+    if event == MxpEvent.DISCONNECT.value:
         fields.append(add_room_id())
         fields.append(add_lesson_id())
         fields.append(add_role())
 
-    elif event == MixpanelEvent.RECONNECT.value:
+    elif event == MxpEvent.RECONNECT.value:
         fields.append(add_room_id())
         fields.append(add_lesson_id())
         fields.append(add_role())
 
-    elif event == MixpanelEvent.LOGIN.value:
+    elif event == MxpEvent.LOGIN.value:
         fields += add_client_must_have_cols()
         fields.append(add_session_id())
-        fields.append(add_other(MixpanelColName.CS_LOGIN_TYPE.value))
+        fields.append(add_other(MxpCol.CS_LOGIN_TYPE.value))
 
-    elif event == MixpanelEvent.LOGOUT.value:
-        fields += add_client_must_have_cols()
-        fields.append(add_session_id())
-        fields.append(add_room_id())
-
-    elif event == MixpanelEvent.LESSON_START.value:
+    elif event == MxpEvent.LOGOUT.value:
         fields += add_client_must_have_cols()
         fields.append(add_session_id())
         fields.append(add_room_id())
-        fields.append(add_lesson_id())
 
-    elif event == MixpanelEvent.LESSON_END.value:
+    elif event == MxpEvent.LESSON_START.value:
         fields += add_client_must_have_cols()
         fields.append(add_session_id())
         fields.append(add_room_id())
         fields.append(add_lesson_id())
 
-    elif event == MixpanelEvent.STUD_JOIN.value:
+    elif event == MxpEvent.LESSON_END.value:
+        fields += add_client_must_have_cols()
+        fields.append(add_session_id())
+        fields.append(add_room_id())
+        fields.append(add_lesson_id())
+
+    elif event == MxpEvent.STUD_JOIN.value:
         fields += add_client_must_have_cols()
         fields.append(add_lesson_id())
         fields.append(add_room_id())
         fields.append(add_trigger_type())
         fields += add_client_web_default_cols()
 
-    elif event == MixpanelEvent.STUD_LEAVE.value:
+    elif event == MxpEvent.STUD_LEAVE.value:
         fields += add_client_must_have_cols()
         fields.append(add_lesson_id())
         fields.append(add_room_id())
         fields.append(add_trigger_type())
         fields += add_client_web_default_cols()
 
-    elif event == MixpanelEvent.PUSH_BTN.value:
+    elif event == MxpEvent.PUSH_BTN.value:
         fields += add_client_must_have_cols()
         fields.append(add_session_id())
         fields.append(add_lesson_id())
         fields.append(add_room_id())
-        fields.append(add_other(MixpanelColName.CS_TASK_ID.value))
-        fields.append(add_other(MixpanelColName.CS_PUSH_TYPE.value))
+        fields.append(add_other(MxpCol.CS_TASK_ID.value))
+        fields.append(add_other(MxpCol.CS_PUSH_TYPE.value))
 
-    elif event == MixpanelEvent.QUIZ_START.value:
+    elif event == MxpEvent.QUIZ_START.value:
         fields += add_client_must_have_cols()
         fields.append(add_session_id())
         fields.append(add_lesson_id())
         fields.append(add_room_id())
-        fields.append(add_other(MixpanelColName.CS_QUIZ_ID.value))
-        fields.append(add_other(MixpanelColName.CS_QUIZ_TYPE.value))
+        fields.append(add_other(MxpCol.CS_QUIZ_ID.value))
+        fields.append(add_other(MxpCol.CS_QUIZ_TYPE.value))
 
-    elif event == MixpanelEvent.QUIZ_END.value:
+    elif event == MxpEvent.QUIZ_END.value:
         fields += add_client_must_have_cols()
         fields.append(add_session_id())
         fields.append(add_lesson_id())
         fields.append(add_room_id())
-        fields.append(add_other(MixpanelColName.CS_QUIZ_ID.value))
-        fields.append(add_other(MixpanelColName.CS_QUIZ_TYPE.value))
+        fields.append(add_other(MxpCol.CS_QUIZ_ID.value))
+        fields.append(add_other(MxpCol.CS_QUIZ_TYPE.value))
 
     return StructType(fields)

@@ -7,7 +7,7 @@ class EnviroType(Enum):
     DEV = 2
 
 
-class MixpanelColName(Enum):
+class MxpCol(Enum):
     """
     MP_: Default properties in mixpanel,
     CS_: Properties in Class Swift,
@@ -36,12 +36,12 @@ class MixpanelColName(Enum):
     CS_SESSION = "cs_session_id"
 
 
-class DWCommonColName(Enum):
+class CommonCol(Enum):
     DW_CREATE_DATE = "create_date"
     DW_LAST_UPD_DATE = "last_upd_date"
 
 
-class MixpanelEvent(Enum):
+class MxpEvent(Enum):
     DISCONNECT = "disconnect"
     STUD_LEAVE = "studentleave"
     LESSON_END = "lessonend"
