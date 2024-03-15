@@ -124,30 +124,18 @@ def is_file_expired(file_path: str) -> bool:
     return now > now_aware
 
 
-def fetch_unix_startdate_by_date(year: int, month: int, day: int):
+def convert_unix_o_clock(year: int, month: int, day: int):
     """
     return a unix datetime object with time is 00:00:00 and its epoch time
     """
-    tz_gmt = ZoneInfo("GMT")
-    startdate = datetime(year, month, day, 0, 0, tzinfo=tz_gmt)
-    return {
-        "unix_start_date": startdate,
-        "unix_start_epoch": int(startdate.timestamp()),
-    }
+    o_clock_date = datetime(year, month, day, 0, 0, tzinfo=tz_gmt)
+    return (o_clock_date, int(o_clock_date.timestamp()))
 
 
-def find_max_unix_date_in_wh(table_name: str):
+def convert_unix_o_clock_by_dw(table_name: str):
     last_epoch = ph.query_max_epoch_time(table_name)
-    tz_gmt = ZoneInfo("GMT")
     last_dt = datetime.fromtimestamp(last_epoch, tz_gmt)
-    sdate_dict = fetch_unix_startdate_by_date(last_dt.year, last_dt.month, last_dt.day)
-    logger.info(
-        f"{sdate_dict['unix_start_date']}, epoch={sdate_dict['unix_start_epoch']}"
-    )
-    return {
-        "unix_start_date": datetime.strftime(sdate_dict["unix_start_date"], "%Y-%m-%d"),
-        "unix_start_epoch": sdate_dict["unix_start_epoch"],
-    }
+    return convert_unix_o_clock(last_dt.year, last_dt.month, last_dt.day)
 
 
 def send_process(sdate_str, edate_str, event_list, fout_name, file_processor):
@@ -157,6 +145,27 @@ def send_process(sdate_str, edate_str, event_list, fout_name, file_processor):
     if upload:
         logger.info(f"upload file to s3 {fout_name} successfully")
     return content
+
+
+def gen_exec_time_info(input_start, input_end, table_name=None):
+    exec_time_dict = {}
+    if input_start:
+        o_clock_info = convert_unix_o_clock(
+            int(input_start[:4]), int(input_start[4:6]), int(input_start[6:])
+        )
+        exec_time_dict["all"] = {
+            "start_date": f"{input_start[:4]}-{input_start[4:6]}-{input_start[6:]}",  # 2024-03-13
+            "end_date": f"{input_end[:4]}-{input_end[4:6]}-{input_end[6:]}",  # 2024-03-14
+            "last_max_epoch": o_clock_info[1],  # int:1703140509
+        }
+    elif table_name:
+        o_clock_info = convert_unix_o_clock_by_dw(table_name)
+        exec_time_dict = {
+            "start_date": datetime.strftime(o_clock_info[0], "%Y-%m-%d"),
+            "end_date": datetime.strftime(datetime.now(tz=tz_gmt), "%Y-%m-%d"),
+            "last_max_epoch": o_clock_info[1],
+        }
+    return exec_time_dict
 
 
 if __name__ == "__main__":
@@ -199,21 +208,11 @@ if __name__ == "__main__":
         events = args.events.split(",")
 
     today: datetime = datetime.now(tz=tz_cst)
-    del_time_dict = None
-    sdate_str = None
-    edate_str = None
-
-    if args.sdate:
-        sdate_str = args.sdate
-        edate_str = args.edate
-
-        del_time_dict = fetch_unix_startdate_by_date(
-            int(sdate_str[:4]), int(sdate_str[4:6]), int(sdate_str[6:])
-        )
-
+    exec_time_dict = gen_exec_time_info(args.sdate, args.edate)
     file_processor = None
     root_path = None
     env_enum = EnviroType.PROD
+
     if args.test:
         env_enum = EnviroType.DEV
         root_path = "./data/mixpanel"
@@ -241,17 +240,14 @@ if __name__ == "__main__":
 
         table_name = f"mp_{event}"
         folder_path = f"{root_path}/{event}"
-
-        if not args.sdate:
-            del_time_dict = find_max_unix_date_in_wh(table_name)
-            sdate_str = del_time_dict["unix_start_date"]
-            edate_str = datetime.strftime(datetime.now(tz=tz_gmt), "%Y-%m-%d")
-
-        # epoch=32503680000 ->  3000/1/1
-        del_epoch = del_time_dict.get("unix_start_epoch", 32503680000)
+        exec_time_info = exec_time_dict.get(
+            "all", gen_exec_time_info(None, None, table_name)
+        )
+        sdate_str = exec_time_info.get("start_date")
+        edate_str = exec_time_info.get("end_date")
 
         logger.info(f"request data from {sdate_str} to {edate_str}")
-
+        content = None
         if args.notcheck:
             fout_name = f"{root_path}/backfile/{event}/{sdate_str}_{edate_str}.json"
             content = send_process(
@@ -270,11 +266,13 @@ if __name__ == "__main__":
                 content = send_process(
                     sdate_str, edate_str, event_list, fout_name, file_processor
                 )
-        ### 指定檔案，寫入DB時可能會造成data duplication, 故不納入自動化流程，手動執行時要注意會刪掉>=start_date之後的資料
+        ## 指定檔案，寫入DB時可能會造成data duplication, 故不納入自動化流程，手動執行時要注意會刪掉>=start_date之後的資料
         # content = file_processor.download_file(
         #     f"prod/mixpanel/class_swift/backfile/{event}/{sdate_str}_{edate_str}.json"
         # )
         if content:
+            # epoch=32503680000 ->  3000/1/1
+            del_epoch = exec_time_info.get("last_max_epoch", 32503680000)
             cnt = ph.delete_by_epoch_time(table_name, del_epoch)
             logger.info(
                 f"delete [{cnt} records] in DW table [{ph.schema}.{table_name}] where [mp_ts >= {del_epoch}]"
