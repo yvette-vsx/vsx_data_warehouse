@@ -5,6 +5,7 @@ from utility.s3_utility import S3Helper
 class AWSFileProcess(BaseFileProcessor):
     def __init__(self, bucket="vsx-warehouse-data"):
         self.s3 = S3Helper(bucket, "dw-s3")
+        self.path = "prod/mixpanel/class_swift"
 
     def find_recent_file(self, folder_path: str) -> str:
         files = self.s3.list_object(folder_path)

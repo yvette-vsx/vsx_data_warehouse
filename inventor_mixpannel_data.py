@@ -36,12 +36,9 @@ def flat_mutli_layers(input: dict, prefix=None) -> dict:
         if isinstance(v, dict):
             rs_dict.update(flat_mutli_layers(v, k))
         elif isinstance(v, list):
-            if map_k == "screens":
-                rs_dict["screen_height"] = v[1]["screen_height"]
-                rs_dict["screen_width"] = v[1]["screen_width"]
-                rs_dict[map_k] = str(v).replace("\\", "").replace(".", "")
-            else:
-                rs_dict[map_k] = str(v)
+            rs_dict[map_k] = ",".join(
+                str(x).replace("\\", "").replace(".", "") for x in v
+            )
         else:
             rs_dict[map_k] = v
     return rs_dict

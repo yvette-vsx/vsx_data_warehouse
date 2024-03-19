@@ -4,6 +4,10 @@ from data_processor.base_file_processor import BaseFileProcessor
 
 
 class LocalFileProcessor(BaseFileProcessor):
+
+    def __init__(self):
+        self.path = "./data/mixpanel"
+
     def find_recent_file(self, folder_path: str) -> str:
         file_path = f"{folder_path}/*.json"
         files = glob.glob(file_path)
@@ -19,6 +23,7 @@ class LocalFileProcessor(BaseFileProcessor):
         return content
 
     def upload_file(self, full_file_path: str, content: str) -> bool:
+        os.makedirs(os.path.dirname(full_file_path), exist_ok=True)
         with open(full_file_path, "w") as fout:
             fout.write(content)
         return True

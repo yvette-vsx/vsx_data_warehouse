@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from functools import lru_cache
 import json
 import os
 from pyspark.sql.functions import lit, when
@@ -8,6 +9,7 @@ from zoneinfo import ZoneInfo
 from config import PG_WH_PROD_CONFIG
 from helper.mixpannel_helper import Mixpanel
 from helper import pg_mixpanel_helper as ph
+from preprocess_env_info import preprocess_env_info
 from schema import mixpanel_schema
 from utility.constants import (
     EnviroType,
@@ -52,7 +54,7 @@ def flat_mutli_layers(input: dict, prefix=None) -> dict:
         if isinstance(v, dict):
             rs_dict.update(flat_mutli_layers(v, k))
         elif isinstance(v, list):
-            rs_dict[map_k] = ",".join(str(v))
+            rs_dict[map_k] = ",".join(str(x) for x in v)
         else:
             rs_dict[map_k] = v
     return rs_dict
@@ -65,6 +67,8 @@ def process_transform(content: str):
     notnull_cols = [field["name"] for field in fields if not field["nullable"]]
     for line in content.splitlines():
         event_dict = json.loads(line)
+        raw_properties = event_dict["properties"]
+        raw_properties.update(preprocess_env_info(raw_properties))
         flat_dict = flat_mutli_layers(event_dict["properties"])
         # Added a column mp_td from mp_ts
         flat_dict[MxpCol.MP_DT.value] = datetime.fromtimestamp(
@@ -147,24 +151,28 @@ def send_process(sdate_str, edate_str, event_list, fout_name, file_processor):
     return content
 
 
-def gen_exec_time_info(input_start, input_end, table_name=None):
-    exec_time_dict = {}
+@lru_cache(maxsize=None)
+def gen_exec_time_info(input_start, input_end):
     if input_start:
         o_clock_info = convert_unix_o_clock(
             int(input_start[:4]), int(input_start[4:6]), int(input_start[6:])
         )
-        exec_time_dict["all"] = {
+        exec_time_dict = {
             "start_date": f"{input_start[:4]}-{input_start[4:6]}-{input_start[6:]}",  # 2024-03-13
             "end_date": f"{input_end[:4]}-{input_end[4:6]}-{input_end[6:]}",  # 2024-03-14
             "last_max_epoch": o_clock_info[1],  # int:1703140509
         }
-    elif table_name:
-        o_clock_info = convert_unix_o_clock_by_dw(table_name)
-        exec_time_dict = {
-            "start_date": datetime.strftime(o_clock_info[0], "%Y-%m-%d"),
-            "end_date": datetime.strftime(datetime.now(tz=tz_gmt), "%Y-%m-%d"),
-            "last_max_epoch": o_clock_info[1],
-        }
+        return exec_time_dict
+    return None
+
+
+def gen_exec_time_info_by_event(table_name):
+    o_clock_info = convert_unix_o_clock_by_dw(table_name)
+    exec_time_dict = {
+        "start_date": datetime.strftime(o_clock_info[0], "%Y-%m-%d"),
+        "end_date": datetime.strftime(datetime.now(tz=tz_gmt), "%Y-%m-%d"),
+        "last_max_epoch": o_clock_info[1],
+    }
     return exec_time_dict
 
 
@@ -203,25 +211,22 @@ if __name__ == "__main__":
         "PushBtn",
         "QuizStart",
         "QuizEnd",
+        "EnvironmentInfo",
     ]
     if args.events:
         events = args.events.split(",")
 
     today: datetime = datetime.now(tz=tz_cst)
-    exec_time_dict = gen_exec_time_info(args.sdate, args.edate)
     file_processor = None
-    root_path = None
     env_enum = EnviroType.PROD
 
     if args.test:
         env_enum = EnviroType.DEV
-        root_path = "./data/mixpanel"
         from data_processor.local_file_processor import LocalFileProcessor
 
         file_processor = LocalFileProcessor()
 
     else:
-        root_path = f"{env_enum.name.lower()}/mixpanel/class_swift"
         from data_processor.aws_file_processor import AWSFileProcess
 
         file_processor = AWSFileProcess()
@@ -239,17 +244,19 @@ if __name__ == "__main__":
         logger.info(f"Now process event [{event}]")
 
         table_name = f"mp_{event}"
-        folder_path = f"{root_path}/{event}"
-        exec_time_info = exec_time_dict.get(
-            "all", gen_exec_time_info(None, None, table_name)
-        )
+        folder_path = f"{file_processor.path}/{event}"
+        exec_time_info = gen_exec_time_info(
+            args.sdate, args.edate
+        ) or gen_exec_time_info_by_event(table_name)
         sdate_str = exec_time_info.get("start_date")
         edate_str = exec_time_info.get("end_date")
 
         logger.info(f"request data from {sdate_str} to {edate_str}")
         content = None
         if args.notcheck:
-            fout_name = f"{root_path}/backfile/{event}/{sdate_str}_{edate_str}.json"
+            fout_name = (
+                f"{file_processor.path}/backfile/{event}/{sdate_str}_{edate_str}.json"
+            )
             content = send_process(
                 sdate_str, edate_str, event_list, fout_name, file_processor
             )
@@ -268,7 +275,7 @@ if __name__ == "__main__":
                 )
         ## 指定檔案，寫入DB時可能會造成data duplication, 故不納入自動化流程，手動執行時要注意會刪掉>=start_date之後的資料
         # content = file_processor.download_file(
-        #     f"prod/mixpanel/class_swift/backfile/{event}/{sdate_str}_{edate_str}.json"
+        #     f"{file_processor.path}/backfile/{event}/{sdate_str}_{edate_str}.json"
         # )
         if content:
             # epoch=32503680000 ->  3000/1/1

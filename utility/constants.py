@@ -34,6 +34,10 @@ class MxpCol(Enum):
     CS_PLATFORM = "platform"
     MP_DT = "mp_dt"
     CS_SESSION = "cs_session_id"
+    VS_REGION = "vs_region"
+    CS_COUNTRY_CODE = "country_code"
+    SCREEN_HEIGHT = "screen_height"
+    SCREEN_WIDTH = "screen_width"
 
 
 class CommonCol(Enum):
@@ -53,3 +57,4 @@ class MxpEvent(Enum):
     PUSH_BTN = "pushbtn"
     QUIZ_START = "quizstart"
     QUIZ_END = "quizend"
+    APP_ENV_INFO = "environmentinfo"

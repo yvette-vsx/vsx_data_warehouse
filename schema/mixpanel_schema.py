@@ -42,8 +42,11 @@ def add_client_web_default_cols():
     ]
 
 
-def add_other(col_name: str, data_type=StringType(), nullable=True):
-    return StructField(col_name, data_type, nullable)
+def add_other(col_name: str, data_type=None, nullable=True):
+    if data_type:
+        return StructField(col_name, data_type, nullable)
+    else:
+        return StructField(col_name, StringType(), nullable)
 
 
 def add_room_id(nullable=True):
@@ -142,5 +145,22 @@ def generate_schema_by_event(event: str):
         fields.append(add_room_id())
         fields.append(add_other(MxpCol.CS_QUIZ_ID.value))
         fields.append(add_other(MxpCol.CS_QUIZ_TYPE.value))
+
+    elif event == MxpEvent.APP_ENV_INFO.value:
+        # client
+        fields.append(add_other(MxpCol.CS_PLATFORM.value))
+        fields.append(add_other(MxpCol.SCREEN_HEIGHT.value, IntegerType(), True))
+        fields.append(add_other(MxpCol.SCREEN_WIDTH.value, IntegerType(), True))
+        fields.append(add_other(MxpCol.CS_CLIENT.value))
+        # others
+        fields.append(add_other("os"))
+        fields.append(add_other("chassis_type"))
+        fields.append(add_other("cpu_name"))
+        fields.append(add_other("manufacturer"))
+        fields.append(add_other("model"))
+        fields.append(add_other(MxpCol.CS_COUNTRY_CODE.value))
+        fields.append(add_other("screens"))
+        fields.append(add_session_id())
+        fields.append(add_other(MxpCol.VS_REGION.value))
 
     return StructType(fields)
