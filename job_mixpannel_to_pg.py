@@ -153,24 +153,22 @@ def send_process(sdate_str, edate_str, event_list, fout_name, file_processor):
 
 @lru_cache(maxsize=None)
 def gen_exec_time_info(input_start, input_end):
-    if input_start:
-        o_clock_info = convert_unix_o_clock(
-            int(input_start[:4]), int(input_start[4:6]), int(input_start[6:])
-        )
-        exec_time_dict = {
-            "start_date": f"{input_start[:4]}-{input_start[4:6]}-{input_start[6:]}",  # 2024-03-13
-            "end_date": f"{input_end[:4]}-{input_end[4:6]}-{input_end[6:]}",  # 2024-03-14
-            "last_max_epoch": o_clock_info[1],  # int:1703140509
-        }
-        return exec_time_dict
-    return None
+    o_clock_info = convert_unix_o_clock(
+        int(input_start[:4]), int(input_start[4:6]), int(input_start[6:])
+    )
+    exec_time_dict = {
+        "start_date": input_start,  # 20240313
+        "end_date": input_end,  # 20240314
+        "last_max_epoch": o_clock_info[1],  # int:1703140509
+    }
+    return exec_time_dict
 
 
 def gen_exec_time_info_by_event(table_name):
     o_clock_info = convert_unix_o_clock_by_dw(table_name)
     exec_time_dict = {
-        "start_date": datetime.strftime(o_clock_info[0], "%Y-%m-%d"),
-        "end_date": datetime.strftime(datetime.now(tz=tz_gmt), "%Y-%m-%d"),
+        "start_date": datetime.strftime(o_clock_info[0], "%Y%m%d"),
+        "end_date": datetime.strftime(datetime.now(tz=tz_gmt), "%Y%m%d"),
         "last_max_epoch": o_clock_info[1],
     }
     return exec_time_dict
@@ -241,17 +239,18 @@ if __name__ == "__main__":
         else:
             event_list = [e]
             event = e.lower()
-        logger.info(f"Now process event [{event}]")
 
         table_name = f"mp_{event}"
         folder_path = f"{file_processor.path}/{event}"
-        exec_time_info = gen_exec_time_info(
-            args.sdate, args.edate
-        ) or gen_exec_time_info_by_event(table_name)
+        exec_time_info = (
+            gen_exec_time_info(args.sdate, args.edate)
+            if args.sdate
+            else gen_exec_time_info_by_event(table_name)
+        )
         sdate_str = exec_time_info.get("start_date")
         edate_str = exec_time_info.get("end_date")
+        logger.info(f"Now process event [{event}], from {sdate_str} to {edate_str}")
 
-        logger.info(f"request data from {sdate_str} to {edate_str}")
         content = None
         if args.notcheck:
             fout_name = (
