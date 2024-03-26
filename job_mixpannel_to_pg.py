@@ -210,6 +210,7 @@ if __name__ == "__main__":
         "QuizStart",
         "QuizEnd",
         "EnvironmentInfo",
+        "ClickQuizGenerator",
     ]
     if args.events:
         events = args.events.split(",")

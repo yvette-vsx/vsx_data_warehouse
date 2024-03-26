@@ -38,6 +38,7 @@ class MxpCol(Enum):
     CS_COUNTRY_CODE = "country_code"
     SCREEN_HEIGHT = "screen_height"
     SCREEN_WIDTH = "screen_width"
+    CS_ENTITY_ID = "cs_entity_id"
 
 
 class CommonCol(Enum):
@@ -58,3 +59,4 @@ class MxpEvent(Enum):
     QUIZ_START = "quizstart"
     QUIZ_END = "quizend"
     APP_ENV_INFO = "environmentinfo"
+    CLICK_QUIZ_GEN = "clickquizgenerator"

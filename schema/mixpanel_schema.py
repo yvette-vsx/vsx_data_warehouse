@@ -29,6 +29,14 @@ def add_client_must_have_cols():
     ]
 
 
+def add_teacher_app_must_have_cols():
+    return [
+        StructField(MxpCol.CS_ENTITY_ID.value, StringType(), True),
+        StructField(MxpCol.CS_CLIENT.value, StringType(), True),
+        add_session_id(),
+    ]
+
+
 def add_client_web_default_cols():
     return [
         StructField("browser", StringType(), True),
@@ -87,24 +95,20 @@ def generate_schema_by_event(event: str):
         fields.append(add_role())
 
     elif event == MxpEvent.LOGIN.value:
-        fields += add_client_must_have_cols()
-        fields.append(add_session_id())
+        fields += add_teacher_app_must_have_cols()
         fields.append(add_other(MxpCol.CS_LOGIN_TYPE.value))
 
     elif event == MxpEvent.LOGOUT.value:
-        fields += add_client_must_have_cols()
-        fields.append(add_session_id())
+        fields += add_teacher_app_must_have_cols()
         fields.append(add_room_id())
 
     elif event == MxpEvent.LESSON_START.value:
-        fields += add_client_must_have_cols()
-        fields.append(add_session_id())
+        fields += add_teacher_app_must_have_cols()
         fields.append(add_room_id())
         fields.append(add_lesson_id())
 
     elif event == MxpEvent.LESSON_END.value:
-        fields += add_client_must_have_cols()
-        fields.append(add_session_id())
+        fields += add_teacher_app_must_have_cols()
         fields.append(add_room_id())
         fields.append(add_lesson_id())
 
@@ -123,24 +127,22 @@ def generate_schema_by_event(event: str):
         fields += add_client_web_default_cols()
 
     elif event == MxpEvent.PUSH_BTN.value:
-        fields += add_client_must_have_cols()
-        fields.append(add_session_id())
+        fields += add_teacher_app_must_have_cols()
         fields.append(add_lesson_id())
         fields.append(add_room_id())
         fields.append(add_other(MxpCol.CS_TASK_ID.value))
         fields.append(add_other(MxpCol.CS_PUSH_TYPE.value))
 
     elif event == MxpEvent.QUIZ_START.value:
-        fields += add_client_must_have_cols()
-        fields.append(add_session_id())
+        fields += add_teacher_app_must_have_cols()
         fields.append(add_lesson_id())
         fields.append(add_room_id())
         fields.append(add_other(MxpCol.CS_QUIZ_ID.value))
         fields.append(add_other(MxpCol.CS_QUIZ_TYPE.value))
+        fields.append(add_other("quiz_maker"))
 
     elif event == MxpEvent.QUIZ_END.value:
-        fields += add_client_must_have_cols()
-        fields.append(add_session_id())
+        fields += add_teacher_app_must_have_cols()
         fields.append(add_lesson_id())
         fields.append(add_room_id())
         fields.append(add_other(MxpCol.CS_QUIZ_ID.value))
@@ -162,5 +164,9 @@ def generate_schema_by_event(event: str):
         fields.append(add_other("screens"))
         fields.append(add_session_id())
         fields.append(add_other(MxpCol.VS_REGION.value))
+    elif event == MxpEvent.CLICK_QUIZ_GEN.value:
+        fields += add_teacher_app_must_have_cols()
+        fields.append(add_lesson_id())
+        fields.append(add_room_id())
 
     return StructType(fields)
