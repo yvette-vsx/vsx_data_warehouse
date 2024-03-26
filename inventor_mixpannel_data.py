@@ -7,7 +7,6 @@ from sqlalchemy import create_engine
 
 from config import PG_PROD_CONNECT_URL
 from helper.mixpannel_helper import Mixpanel
-from helper import pg_mixpanel_helper as ph
 from utility.constants import EnviroType
 from utility.logger import logger
 
@@ -76,20 +75,6 @@ def fetch_unix_startdate_by_date(year: int, month: int, day: int):
     }
 
 
-def find_max_unix_date_in_wh(table_name: str):
-    last_epoch = ph.query_max_epoch_time(table_name)
-    tz_gmt = ZoneInfo("GMT")
-    last_dt = datetime.fromtimestamp(last_epoch, tz_gmt)
-    sdate_dict = fetch_unix_startdate_by_date(last_dt.year, last_dt.month, last_dt.day)
-    logger.info(
-        f"{sdate_dict['unix_start_date']}, epoch={sdate_dict['unix_start_epoch']}"
-    )
-    return {
-        "unix_start_date": datetime.strftime(sdate_dict["unix_start_date"], "%Y-%m-%d"),
-        "unix_start_epoch": sdate_dict["unix_start_epoch"],
-    }
-
-
 def send_process(sdate_str, edate_str, event_list, fout_name, file_processor):
     logger.info("Sent a request")
     content = mixpanel.send_request(sdate_str, edate_str, event=event_list)  # type: ignore
@@ -101,19 +86,22 @@ def send_process(sdate_str, edate_str, event_list, fout_name, file_processor):
 
 if __name__ == "__main__":
 
-    events = ["EnvironmentInfo"]
+    events = [
+        "ViewLessonSummarizerPage",
+        "ViewLessonSummaryResultPage",
+        "ViewSummaryResult",
+        "GenerateSessionStart",
+        "GenerateSessionEnd",
+        "GotoLessonSummarizer",
+        "SummaryGeneratingCancel",
+    ]
 
     today: datetime = datetime.now(tz=tz_cst)
-    del_time_dict = None
 
     sdate_str = "20240301"
-    edate_str = "20240312"
+    edate_str = datetime.strftime(today, "%Y%m%d")
 
-    del_time_dict = fetch_unix_startdate_by_date(
-        int(sdate_str[:4]), int(sdate_str[4:6]), int(sdate_str[6:])
-    )
-
-    env_enum = EnviroType.PROD
+    env_enum = EnviroType.DEV
     from data_processor.local_file_processor import LocalFileProcessor
 
     file_processor = LocalFileProcessor()
@@ -126,37 +114,33 @@ if __name__ == "__main__":
         logger.info(f"Now process event [{event}]")
 
         table_name = f"mp_{event}"
-        folder_path = f"./data/mixpanel/{event}"
-        not_check = False
+        folder_path = f"{file_processor.path}/{event}"
+        not_check = True
 
-        # if not_check:
-        #     fout_name = f"./data/mixpanel/{event}/{sdate_str}_{edate_str}.json"
-        #     content = send_process(
-        #         sdate_str, edate_str, event_list, fout_name, file_processor
-        #     )
-        # else:
-        #     recent_file = file_processor.find_recent_file(folder_path)
-        #     is_expired = is_file_expired(recent_file) if recent_file else False
-        #     if recent_file and not is_expired:
-        #         logger.info(f"download file:{recent_file}")
-        #         content = file_processor.download_file(recent_file)
-        #     else:
-        #         fout_name = (
-        #             f"{folder_path}/{datetime.strftime(today, '%Y%m%d%H%M%S')}.json"
-        #         )
-        #         content = send_process(
-        #             sdate_str, edate_str, event_list, fout_name, file_processor
-        #         )
-
-        # del_epoch = del_time_dict.get("unix_start_epoch", 32503680000)
+        if not_check:
+            fout_name = (
+                f"{file_processor.path}/backfile/{event}/{sdate_str}_{edate_str}.json"
+            )
+            content = send_process(
+                sdate_str, edate_str, event_list, fout_name, file_processor
+            )
+        else:
+            recent_file = file_processor.find_recent_file(folder_path)
+            is_expired = is_file_expired(recent_file) if recent_file else False
+            if recent_file and not is_expired:
+                logger.info(f"download file:{recent_file}")
+                content = file_processor.download_file(recent_file)
+            else:
+                fout_name = (
+                    f"{folder_path}/{datetime.strftime(today, '%Y%m%d%H%M%S')}.json"
+                )
+                content = send_process(
+                    sdate_str, edate_str, event_list, fout_name, file_processor
+                )
 
         ### 指定檔案，寫入DB時可能會造成data duplication, 故不納入自動化流程，手動執行時要注意會刪掉>=start_date之後的資料
-        content = file_processor.download_file(
-            f"/Users/yuyv/py_projects/vsx_data_warehouse/data/mixpanel/EnvironmentInfo/20240301_20240312.json"
-        )
+        # content = file_processor.download_file(
+        #     f"{file_processor.path}/backfile/{event}/{sdate_str}_{edate_str}.json"
+        # )
         if content:
-            # cnt = ph.delete_by_epoch_time(table_name, del_epoch)
-            # logger.info(
-            #     f"delete [{cnt} records] in DW table [{ph.schema}.{table_name}] where [mp_ts >= {del_epoch}]"
-            # )
             transform_load(content, table_name)
